@@ -53,6 +53,3 @@ def batch(payload: List[InText]):
     clf, le = app.state.clf, app.state.le
     res = [{"label": predict_topic(p.title or "", p.content or "", clf, le)} for p in payload]
     return {"results": res, "latency_ms": int((time.time()-t)*1000)}
-
-if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=int(os.getenv("PORT", "8001")), reload=True)
