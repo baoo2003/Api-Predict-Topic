@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
-from phobert_svm_pipeline import predict_topic
+from phobert_svm_pipeline import load_phobert_onnx, predict_topic
 from proccessvitext import *
 
 MODEL_DIR = os.getenv("MODEL_DIR", "models")
@@ -15,6 +15,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 async def lifespan(app: FastAPI):
     app.state.clf = joblib.load(MODEL_DIR + "/svm_cso_optimized.joblib")
     app.state.le = joblib.load(MODEL_DIR + "/label_encoder.joblib")
+    app.state.tokenizer, app.state.model = load_phobert_onnx()
     yield
 
 app = FastAPI(title="PhoBERT+SVM Topic API", lifespan=lifespan)
@@ -44,7 +45,7 @@ def predict(p: InText):
     p.content = preprocess_text(p.content, set())
     print("Preprocessed title:", p.title)
     print("Preprocessed content:", p.content)
-    lbl = predict_topic(p.title or "", p.content or "", app.state.clf, app.state.le)
+    lbl = predict_topic(app.state.model, app.state.tokenizer, p.title or "", p.content or "", app.state.clf, app.state.le)
     return {"label": lbl, "latency_ms": int((time.time()-t)*1000)}
 
 @app.post("/predict-batch")
