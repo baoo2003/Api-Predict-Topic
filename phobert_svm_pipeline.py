@@ -1,14 +1,38 @@
 import numpy as np
+import os
 import torch
 import onnxruntime as ort
 from transformers import AutoTokenizer
+import requests
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def load_phobert_onnx(local_tokenizer_dir="phobert-base/tokenizer",
-                      onnx_model_path="phobert-base/model.onnx"):
-    tokenizer = AutoTokenizer.from_pretrained(local_tokenizer_dir, use_fast=False)
-    session = ort.InferenceSession(onnx_model_path, providers=["CPUExecutionProvider"])
+def load_phobert_onnx(
+    local_dir: str = "phobert-base",
+    tokenizer_dir: str = "phobert-base/tokenizer",
+    onnx_path: str = "phobert-base/model.onnx",
+    repo_url: str = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx"
+):
+    """
+    Tải tokenizer từ local và model ONNX từ local (nếu chưa có thì tự tải từ Hugging Face).
+    """
+    # 1. Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, use_fast=False)
+
+    # 2. Tải ONNX model nếu chưa tồn tại
+    if not os.path.exists(onnx_path):
+        print(">> Downloading ONNX model from Hugging Face...")
+        os.makedirs(local_dir, exist_ok=True)
+        with requests.get(repo_url, stream=True) as r:
+            r.raise_for_status()
+            with open(onnx_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        print(f">> Downloaded ONNX model to: {onnx_path}")
+
+    # 3. Load ONNX model
+    print(">> Loading ONNX model with onnxruntime...")
+    session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
     return tokenizer, session
 
 def _mean_pool(last_hidden_state: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
