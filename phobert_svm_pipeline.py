@@ -1,30 +1,26 @@
+from io import BytesIO
 import numpy as np
 import os
 import onnxruntime as ort
 from transformers import AutoTokenizer
 import requests
+import uvicorn
 
-def load_phobert_onnx(local_dir="models/phobert-onnx"):
-    os.makedirs(local_dir, exist_ok=True)
-    model_path = os.path.join(local_dir, "model.onnx")
-    tokenizer_path = os.path.join(local_dir, "tokenizer")
+def load_phobert_onnx(
+    tokenizer_dir: str = "phobert-base/tokenizer",
+    onnx_url: str = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx"
+):
+    print(">> Downloading ONNX model from Hugging Face...")
 
-    if not os.path.exists(model_path):
-        print(">> Downloading ONNX model from Hugging Face...")
-        hf_token = os.getenv("HF_TOKEN")
-        headers = {"Authorization": f"Bearer {hf_token}"} if hf_token else {}
+    r = requests.get(onnx_url)
+    r.raise_for_status()
 
-        r = requests.get(
-            "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx",
-            headers=headers
-        )
-        r.raise_for_status()
-        with open(model_path, "wb") as f:
-            f.write(r.content)
+    onnx_bytes = BytesIO(r.content)
+    session = ort.InferenceSession(onnx_bytes.read(), providers=["CPUExecutionProvider"])
 
-    # Load tokenizer như bình thường (không cần auth nếu đã clone hoặc push tokenizer local)
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=False)
-    session = ort.InferenceSession(model_path)
+    print(">> ONNX model loaded into memory.")
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, use_fast=False)
+
     return tokenizer, session
 
 def _mean_pool(last_hidden_state: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
@@ -68,3 +64,6 @@ def predict_topic(session, tokenizer, title: str, content: str, clf, le,
     vec = phobert_embed(session, tokenizer, [text], batch_size=batch_size, max_length=max_length)
     pred = clf.predict(vec)[0]
     return le.inverse_transform([pred])[0]
+
+if __name__ == "__main__":
+    uvicorn.run("app:app", host="0.0.0.0", port=int(os.getenv("PORT", "8001")), reload=True)

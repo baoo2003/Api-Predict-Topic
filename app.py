@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
-import uvicorn
 from phobert_svm_pipeline import load_phobert_onnx, predict_topic
 from proccessvitext import *
 
@@ -33,7 +32,7 @@ class Out(BaseModel):
 @app.get("/health")
 def health():
     le = getattr(app.state, "le", None)
-    return {"status": "ok", "device": str(device), "model_dir": MODEL_DIR,
+    return {"status": "ok", "model_dir": MODEL_DIR,
             "num_classes": len(getattr(le, "classes_", [])) if le else 0}
 
 @app.post("/predict", response_model=Out)
