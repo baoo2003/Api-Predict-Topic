@@ -12,7 +12,7 @@ def load_phobert_onnx(
 ):
     print(">> Downloading ONNX model from Hugging Face...")
 
-    r = requests.get(onnx_url)
+    r = requests.get(onnx_url, timeout=300)
     r.raise_for_status()
 
     onnx_bytes = BytesIO(r.content)
@@ -64,6 +64,3 @@ def predict_topic(session, tokenizer, title: str, content: str, clf, le,
     vec = phobert_embed(session, tokenizer, [text], batch_size=batch_size, max_length=max_length)
     pred = clf.predict(vec)[0]
     return le.inverse_transform([pred])[0]
-
-if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=int(os.getenv("PORT", "8001")), reload=True)
