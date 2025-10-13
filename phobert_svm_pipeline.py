@@ -4,21 +4,23 @@ import os
 import onnxruntime as ort
 from transformers import AutoTokenizer
 import requests
-import uvicorn
 
 def load_phobert_onnx(
     tokenizer_dir: str = "phobert-base/tokenizer",
     onnx_url: str = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx"
 ):
-    print(">> Downloading ONNX model from Hugging Face...")
+    try:
+        print(">> Downloading ONNX model from Hugging Face...")
+        r = requests.get(onnx_url, timeout=300)
+        r.raise_for_status()
+        onnx_bytes = BytesIO(r.content)
+        session = ort.InferenceSession(onnx_bytes.read(), providers=["CPUExecutionProvider"])
+        print(">> ONNX model downloaded.")
+    except Exception as e:
+        print("❌ Failed to download ONNX model:", e)
+        raise
 
-    r = requests.get(onnx_url, timeout=300)
-    r.raise_for_status()
-
-    onnx_bytes = BytesIO(r.content)
-    session = ort.InferenceSession(onnx_bytes.read(), providers=["CPUExecutionProvider"])
-
-    print(">> ONNX model loaded into memory.")
+    print(">> Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, use_fast=False)
 
     return tokenizer, session
