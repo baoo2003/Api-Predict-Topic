@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
+
+import uvicorn
 from phobert_svm_pipeline import load_phobert_onnx, predict_topic
 from proccessvitext import *
 
