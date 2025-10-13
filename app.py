@@ -1,5 +1,5 @@
 import joblib
-import os, time, torch, uvicorn
+import os, time
 from typing import List, Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +9,6 @@ from phobert_svm_pipeline import load_phobert_onnx, predict_topic
 from proccessvitext import *
 
 MODEL_DIR = os.getenv("MODEL_DIR", "models")
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
