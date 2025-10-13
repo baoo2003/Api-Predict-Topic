@@ -4,32 +4,27 @@ import onnxruntime as ort
 from transformers import AutoTokenizer
 import requests
 
-def load_phobert_onnx(
-    local_dir: str = "phobert-base",
-    tokenizer_dir: str = "phobert-base/tokenizer",
-    onnx_path: str = "phobert-base/model.onnx",
-    repo_url: str = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx"
-):
-    """
-    Tải tokenizer từ local và model ONNX từ local (nếu chưa có thì tự tải từ Hugging Face).
-    """
-    # 1. Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, use_fast=False)
+def load_phobert_onnx(local_dir="models/phobert-onnx"):
+    os.makedirs(local_dir, exist_ok=True)
+    model_path = os.path.join(local_dir, "model.onnx")
+    tokenizer_path = os.path.join(local_dir, "tokenizer")
 
-    # 2. Tải ONNX model nếu chưa tồn tại
-    if not os.path.exists(onnx_path):
+    if not os.path.exists(model_path):
         print(">> Downloading ONNX model from Hugging Face...")
-        os.makedirs(local_dir, exist_ok=True)
-        with requests.get(repo_url, stream=True) as r:
-            r.raise_for_status()
-            with open(onnx_path, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-        print(f">> Downloaded ONNX model to: {onnx_path}")
+        hf_token = os.getenv("HF_TOKEN")
+        headers = {"Authorization": f"Bearer {hf_token}"} if hf_token else {}
 
-    # 3. Load ONNX model
-    print(">> Loading ONNX model with onnxruntime...")
-    session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
+        r = requests.get(
+            "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx",
+            headers=headers
+        )
+        r.raise_for_status()
+        with open(model_path, "wb") as f:
+            f.write(r.content)
+
+    # Load tokenizer như bình thường (không cần auth nếu đã clone hoặc push tokenizer local)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=False)
+    session = ort.InferenceSession(model_path)
     return tokenizer, session
 
 def _mean_pool(last_hidden_state: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
