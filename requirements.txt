@@ -1,8 +1,5 @@
-# NLP + PhoBERT
-torch==2.7.1
-transformers==4.47.0
-sentencepiece==0.2.0
-tokenizers==0.21.0
+# NLP + PhoBERT (không cần torch)
+transformers[sentencepiece]==4.37.2
 
 # Tiền xử lý tiếng Việt
 underthesea==6.8.4
@@ -13,9 +10,10 @@ scikit-learn==1.7.2
 joblib==1.4.2
 numpy==1.24.3
 
+# ONNX
+onnx==1.16.0
+onnxruntime==1.17.3
+
 # API
 fastapi==0.115.5
 uvicorn[standard]==0.30.6
-
-onnx==1.16.0
-onnxruntime==1.17.3

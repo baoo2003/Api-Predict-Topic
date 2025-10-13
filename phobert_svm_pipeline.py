@@ -1,11 +1,8 @@
 import numpy as np
 import os
-import torch
 import onnxruntime as ort
 from transformers import AutoTokenizer
 import requests
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def load_phobert_onnx(
     local_dir: str = "phobert-base",
