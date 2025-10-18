@@ -7,21 +7,55 @@ import requests
 
 def load_phobert_onnx(
     tokenizer_dir: str = "phobert-base/tokenizer",
-    onnx_url: str = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx"
+    onnx_url: str = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx",
+    model_path: str = "phobert-base/model.onnx",
+    allow_download: bool = True,
+    timeout: int = 600,
+    chunk_size: int = 16 * 1024 * 1024  # 16MB mỗi lần đọc để tiết kiệm RAM
 ):
-    try:
-        print(">> Downloading ONNX model from Hugging Face...")
-        r = requests.get(onnx_url, timeout=300)
-        r.raise_for_status()
-        onnx_bytes = BytesIO(r.content)
-        session = ort.InferenceSession(onnx_bytes.read(), providers=["CPUExecutionProvider"])
-        print(">> ONNX model downloaded.")
-    except Exception as e:
-        print("❌ Failed to download ONNX model:", e)
-        raise
+    """
+    Load PhoBERT ONNX:
+      - Ưu tiên load từ file local (model_path)
+      - Nếu chưa có và allow_download=True thì tải về (streaming, tiết kiệm RAM)
+    Trả về: (tokenizer, onnxruntime.InferenceSession)
+    """
 
+    # 1️⃣ Load tokenizer (nhẹ, đã có trong repo)
     print(">> Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, use_fast=False)
+
+    # 2️⃣ Nếu đã có file model local -> load ngay
+    if os.path.exists(model_path) and os.path.getsize(model_path) > 0:
+        print(f">> Found local ONNX model: {model_path}")
+        session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        print(">> ONNX model loaded from local ✅")
+        return tokenizer, session
+
+    # 3️⃣ Nếu chưa có và không cho phép tải
+    if not allow_download:
+        raise FileNotFoundError(f"❌ ONNX model not found at {model_path} and downloading disabled.")
+
+    # 4️⃣ Tải ONNX model từ Hugging Face (streaming)
+    print(">> Local ONNX model not found. Downloading from Hugging Face (streaming)...")
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    tmp_path = model_path + ".part"
+
+    try:
+        with requests.get(onnx_url, stream=True, timeout=timeout) as r:
+            r.raise_for_status()
+            with open(tmp_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+        os.replace(tmp_path, model_path)
+        print(f">> Downloaded ONNX model to {model_path}")
+    except Exception as e:
+        print(f"❌ Failed to download ONNX model: {e}")
+        raise
+
+    # 5️⃣ Load model vừa tải
+    session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+    print(">> ONNX model loaded successfully ✅")
 
     return tokenizer, session
 
