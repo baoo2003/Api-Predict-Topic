@@ -16,20 +16,18 @@ RUN pip install -r requirements.txt
 # ================================
 # 🧠 TẢI MODEL ONNX TRONG LÚC BUILD
 # ================================
-RUN mkdir -p phobert-base/tokenizer && \
-    echo ">> Downloading PhoBERT ONNX from Hugging Face..." && \
-    python - <<'PYCODE'
-import requests, os
-url = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx"
-path = "phobert-base/model.onnx"
-os.makedirs(os.path.dirname(path), exist_ok=True)
+RUN python - <<'PYCODE'
+import os, requests
+os.makedirs("phobert-base", exist_ok=True)
+url = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model_int8.onnx"
+path = "phobert-base/model_int8.onnx"
+print(f">> Downloading INT8 model from {url} ...")
 with requests.get(url, stream=True, timeout=600) as r:
     r.raise_for_status()
     with open(path, "wb") as f:
         for chunk in r.iter_content(chunk_size=16*1024*1024):
-            if chunk:
-                f.write(chunk)
-print(">> Model ONNX saved to", path)
+            if chunk: f.write(chunk)
+print("✅ PhoBERT INT8 ONNX downloaded successfully.")
 PYCODE
 
 # copy tokenizer nhẹ (đã có trong repo)

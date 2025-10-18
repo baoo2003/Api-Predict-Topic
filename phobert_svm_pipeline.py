@@ -7,36 +7,39 @@ import requests
 
 def load_phobert_onnx(
     tokenizer_dir: str = "phobert-base/tokenizer",
-    onnx_url: str = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx",
-    model_path: str = "phobert-base/model.onnx",
+    # Đường dẫn tới model INT8 bạn đã upload lên Hugging Face
+    onnx_url: str = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model_int8.onnx",
+    model_path: str = "phobert-base/model_int8.onnx",
     allow_download: bool = True,
     timeout: int = 600,
-    chunk_size: int = 16 * 1024 * 1024  # 16MB mỗi lần đọc để tiết kiệm RAM
+    chunk_size: int = 16 * 1024 * 1024  # 16 MB mỗi chunk để tiết kiệm RAM
 ):
     """
-    Load PhoBERT ONNX:
-      - Ưu tiên load từ file local (model_path)
-      - Nếu chưa có và allow_download=True thì tải về (streaming, tiết kiệm RAM)
+    Load PhoBERT ONNX INT8:
+      - Ưu tiên load từ local (model_int8.onnx)
+      - Nếu chưa có và allow_download=True thì tải về (streaming)
     Trả về: (tokenizer, onnxruntime.InferenceSession)
     """
 
-    # 1️⃣ Load tokenizer (nhẹ, đã có trong repo)
     print(">> Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, use_fast=False)
 
-    # 2️⃣ Nếu đã có file model local -> load ngay
+    # Nếu model INT8 đã có sẵn trong container -> load luôn
     if os.path.exists(model_path) and os.path.getsize(model_path) > 0:
-        print(f">> Found local ONNX model: {model_path}")
-        session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
-        print(">> ONNX model loaded from local ✅")
+        print(f">> Found local INT8 ONNX model: {model_path}")
+        so = ort.SessionOptions()
+        so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+        so.intra_op_num_threads = 1
+        so.inter_op_num_threads = 1
+        session = ort.InferenceSession(model_path, sess_options=so, providers=["CPUExecutionProvider"])
+        print(">> Loaded INT8 ONNX model from local ✅")
         return tokenizer, session
 
-    # 3️⃣ Nếu chưa có và không cho phép tải
     if not allow_download:
-        raise FileNotFoundError(f"❌ ONNX model not found at {model_path} and downloading disabled.")
+        raise FileNotFoundError(f"❌ Model not found locally and downloading disabled: {model_path}")
 
-    # 4️⃣ Tải ONNX model từ Hugging Face (streaming)
-    print(">> Local ONNX model not found. Downloading from Hugging Face (streaming)...")
+    # Nếu chưa có -> tải từ Hugging Face
+    print(">> Downloading PhoBERT INT8 ONNX from Hugging Face (streaming)...")
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
     tmp_path = model_path + ".part"
 
@@ -48,14 +51,18 @@ def load_phobert_onnx(
                     if chunk:
                         f.write(chunk)
         os.replace(tmp_path, model_path)
-        print(f">> Downloaded ONNX model to {model_path}")
+        print(f">> Downloaded PhoBERT INT8 ONNX to {model_path}")
     except Exception as e:
         print(f"❌ Failed to download ONNX model: {e}")
         raise
 
-    # 5️⃣ Load model vừa tải
-    session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
-    print(">> ONNX model loaded successfully ✅")
+    # Load session sau khi tải
+    so = ort.SessionOptions()
+    so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+    so.intra_op_num_threads = 1
+    so.inter_op_num_threads = 1
+    session = ort.InferenceSession(model_path, sess_options=so, providers=["CPUExecutionProvider"])
+    print(">> PhoBERT INT8 model loaded successfully ✅")
 
     return tokenizer, session
 

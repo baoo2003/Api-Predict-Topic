@@ -1,3 +1,3 @@
 export_onnx.py
-phobert-base/model.onnx
+phobert-base/*.onnx
 .env
