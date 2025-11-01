@@ -54,4 +54,4 @@ ENV MODEL_DIR=/app/models
 EXPOSE 8000
 
 # Chạy 1 worker + log nhẹ để tiết kiệm RAM
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "${PORT:-8000}", "--workers", "1", "--log-level", "warning"]
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --log-level warning"]
