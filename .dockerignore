@@ -1,0 +1,27 @@
+# VCS & IDE
+
+.git
+.gitignore
+.vscode
+\*.code-workspace
+
+# Python rác
+
+**pycache**/
+_.pyc
+_.pyo
+_.pyd
+_.log
+\*.sqlite3
+
+# Môi trường
+
+.venv/
+env/
+venv/
+\*.env.local
+
+# Artefacts nặng không cần khi build
+
+phobert-base/model.onnx
+\*\*/.cache/
