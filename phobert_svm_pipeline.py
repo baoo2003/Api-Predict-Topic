@@ -109,9 +109,12 @@ def phobert_embed(session, tokenizer, texts, max_length: int = 256,
         batch = texts[i:i + batch_size]
         encoded = tokenizer(batch, return_tensors="np", padding=True, truncation=True, max_length=max_length)
 
+        input_ids = encoded["input_ids"].astype("int64", copy=False)
+        attention_mask = encoded["attention_mask"].astype("int64", copy=False)
+
         ort_inputs = {
-            "input_ids": encoded["input_ids"],
-            "attention_mask": encoded["attention_mask"]
+            "input_ids": input_ids,
+            "attention_mask": attention_mask
         }
 
         ort_outputs = session.run(["last_hidden_state"], ort_inputs)
