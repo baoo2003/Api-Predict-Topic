@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     app.state.tokenizer, app.state.model = load_phobert_onnx()
     yield
 
-app = FastAPI(title="PhoBERT+SVM Topic API", lifespan=lifespan)
+app = FastAPI(title="PhoBERT+SVM Topic API", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 class InText(BaseModel):
@@ -34,22 +34,24 @@ def health():
     return {"status": "ok", "model_dir": MODEL_DIR,
             "num_classes": len(getattr(le, "classes_", [])) if le else 0}
 
-@app.post("/predict", response_model=Out)
+@app.post("/predict")
 def predict(p: InText):
     t = time.time()
     print("Received payload:", p)
-    print("Original title:", p.title)
-    print("Original content:", p.content)
+
     p.title = preprocess_topic(p.title)
     p.content = preprocess_text(p.content, set())
-    print("Preprocessed title:", p.title)
-    print("Preprocessed content:", p.content)
-    lbl = predict_topic(app.state.model, app.state.tokenizer, p.title or "", p.content or "", app.state.clf, app.state.le)
-    return {"label": lbl, "latency_ms": int((time.time()-t)*1000)}
 
-@app.post("/predict-batch")
-def batch(payload: List[InText]):
-    t = time.time()
-    clf, le = app.state.clf, app.state.le
-    res = [{"label": predict_topic(p.title or "", p.content or "", clf, le)} for p in payload]
-    return {"results": res, "latency_ms": int((time.time()-t)*1000)}
+    result = predict_topic(
+        app.state.model, app.state.tokenizer,
+        p.title or "", p.content or "",
+        app.state.clf, app.state.le,
+        batch_size=4, max_length=128
+    )
+
+    return {
+        "best_label": result["best_label"],
+        "confidence": round(result["confidence"] * 100, 2),
+        "all_predictions": result["all_predictions"],
+        "latency_ms": int((time.time() - t) * 1000)
+    }

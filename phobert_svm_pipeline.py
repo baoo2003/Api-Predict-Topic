@@ -28,10 +28,22 @@ def load_phobert_onnx(
     if os.path.exists(model_path) and os.path.getsize(model_path) > 0:
         print(f">> Found local INT8 ONNX model: {model_path}")
         so = ort.SessionOptions()
+        # tối ưu RAM:
         so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
         so.intra_op_num_threads = 1
         so.inter_op_num_threads = 1
-        session = ort.InferenceSession(model_path, sess_options=so, providers=["CPUExecutionProvider"])
+        so.enable_cpu_mem_arena = False
+        so.enable_mem_pattern = False
+        so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        # giảm busy-wait
+        so.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        so.add_session_config_entry("session.inter_op.allow_spinning", "0")
+
+        providers = [("CPUExecutionProvider", {
+            "arena_extend_strategy": "kSameAsRequested"  # tránh bành trướng arena
+        })]
+
+        session = ort.InferenceSession(model_path, sess_options=so, providers=providers)
         print(">> Loaded INT8 ONNX model from local ✅")
         return tokenizer, session
 
@@ -58,10 +70,22 @@ def load_phobert_onnx(
 
     # Load session sau khi tải
     so = ort.SessionOptions()
+    # tối ưu RAM:
     so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
     so.intra_op_num_threads = 1
     so.inter_op_num_threads = 1
-    session = ort.InferenceSession(model_path, sess_options=so, providers=["CPUExecutionProvider"])
+    so.enable_cpu_mem_arena = False
+    so.enable_mem_pattern = False
+    so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    # giảm busy-wait
+    so.add_session_config_entry("session.intra_op.allow_spinning", "0")
+    so.add_session_config_entry("session.inter_op.allow_spinning", "0")
+
+    providers = [("CPUExecutionProvider", {
+        "arena_extend_strategy": "kSameAsRequested"  # tránh bành trướng arena
+    })]
+
+    session = ort.InferenceSession(model_path, sess_options=so, providers=providers)
     print(">> PhoBERT INT8 model loaded successfully ✅")
 
     return tokenizer, session
@@ -102,8 +126,36 @@ def phobert_embed(session, tokenizer, texts, max_length: int = 256,
     return np.vstack(embs)
 
 def predict_topic(session, tokenizer, title: str, content: str, clf, le,
-                  batch_size: int = 8, max_length: int = 256) -> str:
+                  batch_size: int = 8, max_length: int = 256):
     text = (title or "") + " " + (content or "")
     vec = phobert_embed(session, tokenizer, [text], batch_size=batch_size, max_length=max_length)
-    pred = clf.predict(vec)[0]
-    return le.inverse_transform([pred])[0]
+
+    # Dự đoán xác suất (nếu model có hỗ trợ)
+    if hasattr(clf, "predict_proba"):
+        probs = clf.predict_proba(vec)[0]
+    else:
+        # Nếu model không có predict_proba, chuyển sang decision_function và chuẩn hóa
+        if hasattr(clf, "decision_function"):
+            raw = clf.decision_function(vec)[0]
+            # Chuẩn hóa về 0-1 bằng softmax
+            exp_raw = np.exp(raw - np.max(raw))
+            probs = exp_raw / np.sum(exp_raw)
+        else:
+            probs = np.ones(len(le.classes_)) / len(le.classes_)
+
+    # Lấy nhãn tốt nhất
+    best_idx = int(np.argmax(probs))
+    best_label = le.inverse_transform([best_idx])[0]
+    best_conf = float(probs[best_idx])
+
+    # Danh sách dự đoán tất cả nhãn
+    all_preds = [
+        {"label": le.inverse_transform([i])[0], "confidence": float(probs[i])}
+        for i in range(len(probs))
+    ]
+
+    return {
+        "best_label": best_label,
+        "confidence": best_conf,
+        "all_predictions": sorted(all_preds, key=lambda x: x["confidence"], reverse=True)
+    }
