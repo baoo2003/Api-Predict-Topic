@@ -12,8 +12,8 @@ MODEL_DIR = os.getenv("MODEL_DIR", "models")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.clf = joblib.load(MODEL_DIR + "/svm_cso_optimized.joblib")
-    app.state.le = joblib.load(MODEL_DIR + "/label_encoder.joblib")
+    app.state.clf = joblib.load(MODEL_DIR + "/svm_cso_optimized_1.joblib")
+    app.state.le = joblib.load(MODEL_DIR + "/label_encoder_1.joblib")
     app.state.tokenizer, app.state.model = load_phobert_onnx()
     yield
 
