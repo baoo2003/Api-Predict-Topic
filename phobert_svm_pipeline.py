@@ -7,87 +7,24 @@ import requests
 
 def load_phobert_onnx(
     tokenizer_dir: str = "phobert-base/tokenizer",
-    # Đường dẫn tới model INT8 bạn đã upload lên Hugging Face
-    onnx_url: str = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model_int8.onnx",
-    model_path: str = "phobert-base/model_int8.onnx",
-    allow_download: bool = True,
-    timeout: int = 600,
-    chunk_size: int = 16 * 1024 * 1024  # 16 MB mỗi chunk để tiết kiệm RAM
+    model_path: str = "phobert-base/model.onnx",
 ):
     """
-    Load PhoBERT ONNX INT8:
-      - Ưu tiên load từ local (model_int8.onnx)
-      - Nếu chưa có và allow_download=True thì tải về (streaming)
+    Load PhoBERT ONNX từ local (đã có sẵn trong container).
     Trả về: (tokenizer, onnxruntime.InferenceSession)
     """
 
     print(">> Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, use_fast=False)
 
-    # Nếu model INT8 đã có sẵn trong container -> load luôn
-    if os.path.exists(model_path) and os.path.getsize(model_path) > 0:
-        print(f">> Found local INT8 ONNX model: {model_path}")
-        so = ort.SessionOptions()
-        # tối ưu RAM:
-        so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
-        so.intra_op_num_threads = 1
-        so.inter_op_num_threads = 1
-        so.enable_cpu_mem_arena = False
-        so.enable_mem_pattern = False
-        so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-        # giảm busy-wait
-        so.add_session_config_entry("session.intra_op.allow_spinning", "0")
-        so.add_session_config_entry("session.inter_op.allow_spinning", "0")
+    if not (os.path.exists(model_path) and os.path.getsize(model_path) > 0):
+        raise FileNotFoundError(f"❌ ONNX model not found at: {model_path}")
 
-        providers = [("CPUExecutionProvider", {
-            "arena_extend_strategy": "kSameAsRequested"  # tránh bành trướng arena
-        })]
+    print(f">> Loading ONNX model from: {model_path}")
+    # dùng cấu hình mặc định, không tối ưu RAM gì cả
+    session = ort.InferenceSession(model_path)
 
-        session = ort.InferenceSession(model_path, sess_options=so, providers=providers)
-        print(">> Loaded INT8 ONNX model from local ✅")
-        return tokenizer, session
-
-    if not allow_download:
-        raise FileNotFoundError(f"❌ Model not found locally and downloading disabled: {model_path}")
-
-    # Nếu chưa có -> tải từ Hugging Face
-    print(">> Downloading PhoBERT INT8 ONNX from Hugging Face (streaming)...")
-    os.makedirs(os.path.dirname(model_path), exist_ok=True)
-    tmp_path = model_path + ".part"
-
-    try:
-        with requests.get(onnx_url, stream=True, timeout=timeout) as r:
-            r.raise_for_status()
-            with open(tmp_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=chunk_size):
-                    if chunk:
-                        f.write(chunk)
-        os.replace(tmp_path, model_path)
-        print(f">> Downloaded PhoBERT INT8 ONNX to {model_path}")
-    except Exception as e:
-        print(f"❌ Failed to download ONNX model: {e}")
-        raise
-
-    # Load session sau khi tải
-    so = ort.SessionOptions()
-    # tối ưu RAM:
-    so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
-    so.intra_op_num_threads = 1
-    so.inter_op_num_threads = 1
-    so.enable_cpu_mem_arena = False
-    so.enable_mem_pattern = False
-    so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-    # giảm busy-wait
-    so.add_session_config_entry("session.intra_op.allow_spinning", "0")
-    so.add_session_config_entry("session.inter_op.allow_spinning", "0")
-
-    providers = [("CPUExecutionProvider", {
-        "arena_extend_strategy": "kSameAsRequested"  # tránh bành trướng arena
-    })]
-
-    session = ort.InferenceSession(model_path, sess_options=so, providers=providers)
-    print(">> PhoBERT INT8 model loaded successfully ✅")
-
+    print(">> PhoBERT ONNX loaded ✅")
     return tokenizer, session
 
 def _mean_pool(last_hidden_state: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
