@@ -28,7 +28,7 @@ import os, requests
 os.makedirs("phobert-base", exist_ok=True)
 
 url = "https://huggingface.co/Qbao/phobert-onnx/resolve/main/model.onnx"
-path = "phobert-base/model.onnx")
+path = "phobert-base/model.onnx"
 
 print(f">> Downloading ONNX model from {url} ...")
 
