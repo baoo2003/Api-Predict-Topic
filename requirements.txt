@@ -17,3 +17,6 @@ onnxruntime==1.17.3
 # API
 fastapi==0.115.5
 uvicorn[standard]==0.30.6
+
+#vncoreNLP
+vncorenlp
