@@ -66,8 +66,8 @@ def phobert_embed(session, tokenizer, texts, max_length: int = 256,
     return np.vstack(embs)
 
 def predict_topic(session, tokenizer, title: str, content: str, clf, le,
-                  batch_size: int = 8, max_length: int = 256):
-    text = (title or "") + " " + (content or "")
+                  batch_size: int = 8, max_length: int = 128):
+    text = (title or "") + " </s> " + (content or "")
     vec = phobert_embed(session, tokenizer, [text], batch_size=batch_size, max_length=max_length)
 
     # Dự đoán xác suất (nếu model có hỗ trợ)
