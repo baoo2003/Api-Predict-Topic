@@ -65,37 +65,64 @@ def phobert_embed(session, tokenizer, texts, max_length: int = 256,
 
     return np.vstack(embs)
 
+def _softmax(x: np.ndarray) -> np.ndarray:
+    x = x - np.max(x)
+    exp_x = np.exp(x)
+    return exp_x / np.sum(exp_x)
+
 def predict_topic(session, tokenizer, title: str, content: str, clf, le,
                   batch_size: int = 8, max_length: int = 128):
+    # 1) build input y như lúc train
     text = (title or "") + " </s> " + (content or "")
-    vec = phobert_embed(session, tokenizer, [text], batch_size=batch_size, max_length=max_length)
+    vec = phobert_embed(session, tokenizer, [text],
+                        batch_size=batch_size, max_length=max_length)
 
-    # Dự đoán xác suất (nếu model có hỗ trợ)
-    if hasattr(clf, "predict_proba"):
-        probs = clf.predict_proba(vec)[0]
-    else:
-        # Nếu model không có predict_proba, chuyển sang decision_function và chuẩn hóa
-        if hasattr(clf, "decision_function"):
-            raw = clf.decision_function(vec)[0]
-            # Chuẩn hóa về 0-1 bằng softmax
-            exp_raw = np.exp(raw - np.max(raw))
-            probs = exp_raw / np.sum(exp_raw)
-        else:
-            probs = np.ones(len(le.classes_)) / len(le.classes_)
+    # 2) lấy decision scores (LinearSVC / Pipeline đều có decision_function)
+    if not hasattr(clf, "decision_function"):
+        raise ValueError("Model không có decision_function. Bạn đang load đúng LinearSVC/Pipeline chưa?")
 
-    # Lấy nhãn tốt nhất
-    best_idx = int(np.argmax(probs))
-    best_label = le.inverse_transform([best_idx])[0]
-    best_conf = float(probs[best_idx])
+    raw = clf.decision_function(vec)  # shape: (1, K) hoặc (1,) nếu binary
+    raw = np.atleast_2d(raw)[0]        # -> shape (K,)
 
-    # Danh sách dự đoán tất cả nhãn
+    # 3) classes_ (an toàn cho Pipeline vs estimator)
+    classes = getattr(clf, "classes_", None)
+    if classes is None and hasattr(clf, "named_steps"):
+        classes = clf.named_steps["svm"].classes_
+    if classes is None:
+        raise ValueError("Không tìm thấy classes_ trong clf.")
+
+    classes = np.asarray(classes, dtype=int)
+
+    # 4) pseudo-prob để HIỂN THỊ (không phải xác suất thật)
+    probs = _softmax(raw)
+
+    # 5) chọn best theo raw hoặc probs đều như nhau
+    best_pos = int(np.argmax(raw))
+    best_class = int(classes[best_pos])          # label id thật (0..12)
+    best_label = le.inverse_transform([best_class])[0]
+    best_conf = float(probs[best_pos])
+
+    # 6) margin/gap để debug (thường hữu ích hơn conf)
+    sorted_raw = np.sort(raw)
+    gap = float(sorted_raw[-1] - sorted_raw[-2]) if len(sorted_raw) >= 2 else 0.0
+    margin = float(raw[best_pos])
+
+    # 7) all predictions (map theo classes_)
     all_preds = [
-        {"label": le.inverse_transform([i])[0], "confidence": float(probs[i])}
-        for i in range(len(probs))
+        {
+            "label": le.inverse_transform([int(c)])[0],
+            "confidence": float(probs[pos]),
+            "margin": float(raw[pos]),
+            "class_id": int(c),
+        }
+        for pos, c in enumerate(classes)
     ]
+    all_preds.sort(key=lambda x: x["confidence"], reverse=True)
 
     return {
         "best_label": best_label,
         "confidence": best_conf,
-        "all_predictions": sorted(all_preds, key=lambda x: x["confidence"], reverse=True)
+        "margin": margin,
+        "gap": gap,
+        "all_predictions": all_preds
     }

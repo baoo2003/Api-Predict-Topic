@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
     app.state.tokenizer, app.state.model = load_phobert_onnx()
     yield
 
-app = FastAPI(title="PhoBERT+SVM Topic API", lifespan=lifespan)
+app = FastAPI(title="PhoBERT+SVM Topic API", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 class InText(BaseModel):
