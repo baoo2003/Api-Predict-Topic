@@ -1,15 +1,17 @@
-import string
 import unicodedata
-from underthesea import text_normalize, word_tokenize
+from underthesea import text_normalize
 from bs4 import BeautifulSoup
+import re
+from vncorenlp import VnCoreNLP
 
 def remove_html_tags(text: str) -> str:
     soup = BeautifulSoup(text, "html.parser")
     return soup.get_text()
 
-def remove_punctuation(text: str) -> str:
-    result = text.translate(str.maketrans(string.punctuation, ' '*len(string.punctuation)))
-    return ' '.join(result.split())
+def clean_text_vn(text: str) -> str:
+    text = re.sub(r"[^\w\s_]", " ", text, flags=re.UNICODE)
+    return ' '.join(text.split())
+
 
 def to_lower(text: str) -> str:
     return text.lower()
@@ -21,27 +23,21 @@ def normalize_text(text: str) -> str:
     text = text_normalize(text)
     return text
 
-def split_words(text: str) -> list[str]:
-    return word_tokenize(text, format="text")
+def word_tokenize_vn(text: str) -> str:
+    annotator = VnCoreNLP("vncorenlp/VnCoreNLP-1.2.jar", annotators="wseg")
+    return ' '.join(annotator.tokenize(text)[0])
 
-def stopword_removal(text: str, stopwords: set) -> str:
-    words = text.split()
-    filtered_words = [word for word in words if word not in stopwords]
-    return ' '.join(filtered_words)
-
-def preprocess_text(text: str, stopwords: set) -> str:
+def preprocess_text(text: str) -> str:
     text = remove_html_tags(text)
     text = to_lower(text)
-    text = remove_punctuation(text)
     text = standardize_unicode(text)
     text = normalize_text(text)
-    text = split_words(text)
-    text = stopword_removal(text, stopwords)
+    text = word_tokenize_vn(text)
+    text = clean_text_vn(text)
     return text
 
-def preprocess_topic(text: str) -> str:
-    text = to_lower(text)
-    text = remove_punctuation(text)
-    text = standardize_unicode(text)
-    text = normalize_text(text)
-    return text
+def has_invalid_char(text):
+    return bool(re.search(r"[^\w\s_]", text))
+
+def has_extra_space(text):
+    return bool(re.search(r"\s{2,}", text)) or text != text.strip()

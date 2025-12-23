@@ -65,8 +65,8 @@ def predict(p: InText):
     t = time.time()
     print("Received payload:", p)
 
-    p.title = preprocess_topic(p.title)
-    p.content = preprocess_text(p.content, set())
+    p.title = preprocess_text(p.title)
+    p.content = preprocess_text(p.content)
 
     result = predict_topic(
         app.state.model, app.state.tokenizer,
