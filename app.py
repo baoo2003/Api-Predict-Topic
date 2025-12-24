@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
     app.state.tokenizer, app.state.model = load_phobert_onnx()
     yield
 
-app = FastAPI(title="PhoBERT+SVM Topic API", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="PhoBERT+SVM Topic API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 class InText(BaseModel):
@@ -65,8 +65,10 @@ def predict(p: InText):
     t = time.time()
     print("Received payload:", p)
 
-    p.title = preprocess_text(p.title)
+    p.title = preprocess_text(p.title, rw=True)
+    print("Preprocessed title:", p.title)
     p.content = preprocess_text(p.content)
+    print("Preprocessed content:", p.content)
 
     result = predict_topic(
         app.state.model, app.state.tokenizer,

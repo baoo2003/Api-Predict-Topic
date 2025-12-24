@@ -27,13 +27,15 @@ def word_tokenize_vn(text: str) -> str:
     annotator = VnCoreNLP("vncorenlp/VnCoreNLP-1.2.jar", annotators="wseg")
     return ' '.join(annotator.tokenize(text)[0])
 
-def preprocess_text(text: str) -> str:
+def preprocess_text(text: str, rw=False) -> str:
     text = remove_html_tags(text)
     text = to_lower(text)
     text = standardize_unicode(text)
     text = normalize_text(text)
     text = word_tokenize_vn(text)
     text = clean_text_vn(text)
+    if rw:
+        text = remove_stopwords(text, load_vietnamese_stopwords())
     return text
 
 def has_invalid_char(text):
@@ -41,3 +43,12 @@ def has_invalid_char(text):
 
 def has_extra_space(text):
     return bool(re.search(r"\s{2,}", text)) or text != text.strip()
+
+def load_vietnamese_stopwords(path="vietnamese-stopwords-dash.txt"):
+    with open(path, "r", encoding="utf-8") as f:
+        return set(line.strip() for line in f if line.strip())
+
+def remove_stopwords(text: str, stopwords: set) -> str:
+    tokens = text.split()
+    tokens = [t for t in tokens if t not in stopwords]
+    return " ".join(tokens)
