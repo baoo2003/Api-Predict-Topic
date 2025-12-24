@@ -6,18 +6,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     HF_HUB_DISABLE_TELEMETRY=1
 
-# Cài thư viện hệ thống cần cho onnxruntime + HTTPS + JAVA (cho VnCoreNLP)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 ca-certificates \
-    openjdk-17-jre-headless \
+RUN apt-get -o Acquire::Retries=3 update \
+ && apt-get install -y --no-install-recommends \
+    libgomp1 ca-certificates default-jre-headless \
  && rm -rf /var/lib/apt/lists/*
 
-# (khuyến nghị) set JAVA_HOME cho chắc
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
-
-# (tuỳ chọn) sanity check lúc build
 RUN java -version
+
 
 WORKDIR /app
 
