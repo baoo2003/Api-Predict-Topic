@@ -77,52 +77,58 @@ def predict_topic(session, tokenizer, title: str, content: str, clf, le,
     vec = phobert_embed(session, tokenizer, [text],
                         batch_size=batch_size, max_length=max_length)
 
-    # 2) lấy decision scores (LinearSVC / Pipeline đều có decision_function)
-    if not hasattr(clf, "decision_function"):
-        raise ValueError("Model không có decision_function. Bạn đang load đúng LinearSVC/Pipeline chưa?")
+    # 2) Với model đã calibrate: phải có predict_proba
+    if not hasattr(clf, "predict_proba"):
+        raise ValueError(
+            "Model không có predict_proba(). Hãy load model CalibratedClassifierCV "
+            "(vd: linear_svc_phobert_calibrated.joblib)."
+        )
 
-    raw = clf.decision_function(vec)  # shape: (1, K) hoặc (1,) nếu binary
-    raw = np.atleast_2d(raw)[0]        # -> shape (K,)
+    # 3) Lấy xác suất chuẩn (độ tin cậy)
+    proba = clf.predict_proba(vec)          # shape: (1, K)
+    proba = np.atleast_2d(proba)[0]         # -> (K,)
 
-    # 3) classes_ (an toàn cho Pipeline vs estimator)
+    # 4) classes_ mapping (CalibratedClassifierCV có classes_)
     classes = getattr(clf, "classes_", None)
-    if classes is None and hasattr(clf, "named_steps"):
-        classes = clf.named_steps["svm"].classes_
     if classes is None:
-        raise ValueError("Không tìm thấy classes_ trong clf.")
-
+        raise ValueError("Không tìm thấy classes_ trong model calibrate.")
     classes = np.asarray(classes, dtype=int)
 
-    # 4) pseudo-prob để HIỂN THỊ (không phải xác suất thật)
-    probs = _softmax(raw)
-
-    # 5) chọn best theo raw hoặc probs đều như nhau
-    best_pos = int(np.argmax(raw))
-    best_class = int(classes[best_pos])          # label id thật (0..12)
+    # 5) Chọn best theo proba
+    best_pos = int(np.argmax(proba))
+    best_class = int(classes[best_pos])
     best_label = le.inverse_transform([best_class])[0]
-    best_conf = float(probs[best_pos])
+    best_conf = float(proba[best_pos])      # ✅ confidence đúng
 
-    # 6) margin/gap để debug (thường hữu ích hơn conf)
-    sorted_raw = np.sort(raw)
-    gap = float(sorted_raw[-1] - sorted_raw[-2]) if len(sorted_raw) >= 2 else 0.0
-    margin = float(raw[best_pos])
+    # 6) gap giữa top1-top2 (từ proba) để xem top1 có vượt trội không
+    sorted_p = np.sort(proba)
+    gap = float(sorted_p[-1] - sorted_p[-2]) if len(sorted_p) >= 2 else 0.0
 
-    # 7) all predictions (map theo classes_)
+    # 7) (Tuỳ chọn) vẫn lấy decision_function nếu có để debug margin
+    margin = None
+    if hasattr(clf, "decision_function"):
+        raw = clf.decision_function(vec)
+        raw = np.atleast_2d(raw)[0]
+        margin = float(raw[best_pos])
+
+    # 8) all predictions (theo xác suất thật)
     all_preds = [
         {
             "label": le.inverse_transform([int(c)])[0],
-            "confidence": float(probs[pos]),
-            "margin": float(raw[pos]),
+            "confidence": float(proba[pos]),   # ✅ proba thật
             "class_id": int(c),
         }
         for pos, c in enumerate(classes)
     ]
     all_preds.sort(key=lambda x: x["confidence"], reverse=True)
 
-    return {
+    out = {
         "best_label": best_label,
         "confidence": best_conf,
-        "margin": margin,
         "gap": gap,
         "all_predictions": all_preds
     }
+    if margin is not None:
+        out["margin"] = margin
+
+    return out

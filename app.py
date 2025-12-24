@@ -10,19 +10,19 @@ from proccessvitext import *
 import numpy as np
 
 LABEL_NAMES = [
-    "công nghệ",     # 0
-    "du lịch",       # 1
-    "giáo dục",      # 2
-    "giải trí",      # 3
-    "khoa học",      # 4
-    "kinh doanh",    # 5
-    "pháp luật",     # 6
-    "sức khỏe",      # 7
-    "thế giới",      # 8
-    "thể thao",      # 9
-    "thời sự",       # 10
-    "xe",            # 11
-    "đời sống",      # 12
+    "Công nghệ",     # 0
+    "Du lịch",       # 1
+    "Giáo dục",      # 2
+    "Giải trí",      # 3
+    "Khoa học",      # 4
+    "Kinh doanh",    # 5
+    "Pháp luật",     # 6
+    "Sức khỏe",      # 7
+    "Thế giới",      # 8
+    "Thể thao",      # 9
+    "Thời sự",       # 10
+    "Xe",            # 11
+    "Đời sống",      # 12
 ]
 
 class SimpleLabelEncoder:
@@ -38,12 +38,12 @@ MODEL_DIR = os.getenv("MODEL_DIR", "models")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.clf = joblib.load(MODEL_DIR + "/linear_svc_phobert.joblib")
+    app.state.clf = joblib.load(MODEL_DIR + "/linear_svc_cso_calibrated.joblib")
     app.state.le = SimpleLabelEncoder(LABEL_NAMES)
     app.state.tokenizer, app.state.model = load_phobert_onnx()
     yield
 
-app = FastAPI(title="PhoBERT+SVM Topic API", lifespan=lifespan)
+app = FastAPI(title="PhoBERT+SVM Topic API", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 class InText(BaseModel):
